@@ -37,6 +37,31 @@
             text-align: center;
             font-size: 1.2em;
         }
+        .search-container {
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-bottom: 1px solid #ccc;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .search-container label {
+            font-weight: bold;
+        }
+        .search-container input {
+            padding: 5px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 50px;
+        }
+        .search-results {
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-bottom: 1px solid #ccc;
+            min-height: 20px;
+            font-size: 0.9em;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -53,6 +78,28 @@
             background-color: #A52A2A; /* Red */
             color: white;
             font-weight: bold;
+            position: relative; /* For positioning the plus button */
+        }
+        .add-column-button {
+            background-color: #4CAF50; /* Green */
+            color: white;
+            border: none;
+            border-radius: 50%; /* Circle shape */
+            width: 30px;
+            height: 30px;
+            font-size: 1.2em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1;
+        }
+        .add-column-button:hover {
+            background-color: #45a049;
         }
         .no-column {
             background-color: #FFC0CB; /* Light Pink */
@@ -109,6 +156,13 @@
                 padding: 6px 12px;
                 font-size: 0.9em;
             }
+            .search-container {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .search-container input {
+                width: 100%;
+            }
         }
     </style>
 </head>
@@ -118,6 +172,11 @@
     <div class="container">
         <div class="group-container">
             <div class="group-title">Group A</div>
+            <div class="search-container">
+                <label for="searchA">Search (1-9):</label>
+                <input type="text" id="searchA" placeholder="Enter digit" maxlength="1" />
+            </div>
+            <div class="search-results" id="resultsA"></div>
             <table>
                 <thead>
                     <tr>
@@ -125,6 +184,7 @@
                         <th>24</th>
                         <th>25</th>
                         <th>26</th>
+                        <th><button class="add-column-button" onclick="addColumn('A')">+</button></th>
                     </tr>
                 </thead>
                 <tbody id="groupA-body">
@@ -138,6 +198,11 @@
 
         <div class="group-container">
             <div class="group-title">Group B</div>
+            <div class="search-container">
+                <label for="searchB">Search (1-9):</label>
+                <input type="text" id="searchB" placeholder="Enter digit" maxlength="1" />
+            </div>
+            <div class="search-results" id="resultsB"></div>
             <table>
                 <thead>
                     <tr>
@@ -145,6 +210,7 @@
                         <th>24</th>
                         <th>25</th>
                         <th>26</th>
+                        <th><button class="add-column-button" onclick="addColumn('B')">+</button></th>
                     </tr>
                 </thead>
                 <tbody id="groupB-body">
@@ -159,14 +225,27 @@
 
     <script>
         const NUM_ROWS = 24;
-        const NUM_COLS = 3; // 24, 25, 26
+        let groupColCount = { 'A': 3, 'B': 3 }; // Initial columns for each group (24, 25, 26)
+        
+        // Define digit groups for 2-digit extraction
+        const digitGroups = {
+            '1': ['01', '10', '12', '21', '23', '32', '34', '43', '45', '54', '56', '65', '67', '76', '78', '87', '89', '98', '90', '09'],
+            '2': ['02', '20', '13', '31', '24', '42', '35', '53', '46', '64', '57', '75', '68', '86', '79', '97', '80', '08'],
+            '3': ['03', '30', '14', '41', '25', '52', '36', '63', '47', '74', '58', '85', '69', '96', '70', '07'],
+            '4': ['04', '40', '15', '51', '26', '62', '37', '73', '48', '84', '59', '95', '60', '06'],
+            '5': ['05', '50', '16', '61', '27', '72', '38', '83', '49', '94'],
+            '6': ['06', '60', '17', '71', '28', '82', '39', '93', '40', '04'],
+            '7': ['07', '70', '18', '81', '29', '92', '30', '03'],
+            '8': ['08', '80', '19', '91', '20', '02'],
+            '9': ['09', '90']
+        };
 
         function createTableRows(groupId) {
             const tbody = document.getElementById(`group${groupId}-body`);
             for (let i = 1; i <= NUM_ROWS; i++) {
                 const row = tbody.insertRow();
                 row.innerHTML = `<td class="no-column">${i}</td>`;
-                for (let j = 0; j < NUM_COLS; j++) {
+                for (let j = 0; j < groupColCount[groupId]; j++) {
                     const cell = row.insertCell();
                     const input = document.createElement('input');
                     input.type = 'number';
@@ -185,12 +264,25 @@
             'B': {}  // Stores input values and prediction patterns for Group B
         };
 
+        // Store all pasted 3-digit numbers for search functionality
+        const pastedNumbers = {
+            'A': [],
+            'B': []
+        };
+
         function handleInput(event) {
             const input = event.target;
             const groupId = input.dataset.group;
             const row = parseInt(input.dataset.row);
             const col = parseInt(input.dataset.col);
             const value = input.value === '' ? null : parseInt(input.value);
+
+            // Store 3-digit numbers for search
+            if (value !== null && value >= 100 && value <= 999) {
+                if (!pastedNumbers[groupId].includes(value)) {
+                    pastedNumbers[groupId].push(value);
+                }
+            }
 
             // Clear previous predictions for this group
             clearPredictions(groupId);
@@ -225,63 +317,44 @@
                 return;
             }
 
-            const firstColOccurrences = data.occurrences.filter(occ => occ.col === 0);
+            data.predictions = [];
+            
+            // Get all occurrences sorted by absolute position (column-major)
+            const sortedOccurrences = [...data.occurrences].sort((a, b) => {
+                const posA = a.col * NUM_ROWS + a.row;
+                const posB = b.col * NUM_ROWS + b.row;
+                return posA - posB;
+            });
 
-            if (firstColOccurrences.length < 2) {
-                data.predictions = [];
-                return;
-            }
-
-            // Sort occurrences by row for gap calculation
-            firstColOccurrences.sort((a, b) => a.row - b.row);
-
-            const firstOcc = firstColOccurrences[0];
-            const secondOcc = firstColOccurrences[1];
-            const gap = secondOcc.row - firstOcc.row;
+            // Calculate gap from first to second occurrence
+            const firstOcc = sortedOccurrences[0];
+            const secondOcc = sortedOccurrences[1];
+            const posFirst = firstOcc.col * NUM_ROWS + firstOcc.row;
+            const posSecond = secondOcc.col * NUM_ROWS + secondOcc.row;
+            const gap = posSecond - posFirst;
 
             if (gap <= 0) {
                 data.predictions = [];
                 return;
             }
 
-            data.predictions = [];
-            let lastOcc = firstColOccurrences[firstColOccurrences.length - 1];
+            // Start predicting from the last occurrence
+            let lastOcc = sortedOccurrences[sortedOccurrences.length - 1];
+            let currentPos = lastOcc.col * NUM_ROWS + lastOcc.row;
 
-            // Start predicting from the last occurrence in the first column
-            let currentRow = lastOcc.row;
-            let currentCol = lastOcc.col;
+            // Predict across all columns
+            const maxPos = groupColCount[groupId] * NUM_ROWS;
+            while (true) {
+                currentPos += gap;
+                if (currentPos > maxPos) break;
 
-            // Predict up to 3 columns
-            for (let c = 0; c < NUM_COLS; c++) {
-                if (c < currentCol) continue; // Skip columns before the last occurrence's column
+                const predictedCol = Math.floor((currentPos - 1) / NUM_ROWS);
+                const predictedRow = ((currentPos - 1) % NUM_ROWS) + 1;
 
-                while (true) {
-                    currentRow += gap;
-
-                    let predictedRow = currentRow;
-                    let predictedCol = currentCol;
-
-                    if (predictedRow > NUM_ROWS) {
-                        predictedRow -= NUM_ROWS;
-                        predictedCol++;
-                        currentRow = predictedRow; // Reset currentRow for the next column
-                    }
-
-                    if (predictedCol >= NUM_COLS) {
-                        break; // Stop if past the 3rd column
-                    }
-
-                    // Check if this predicted cell is already an input for the current number
-                    const isExistingInput = data.occurrences.some(occ => occ.row === predictedRow && occ.col === predictedCol);
-                    if (!isExistingInput) {
-                        data.predictions.push({ row: predictedRow, col: predictedCol, value: number });
-                    }
-
-                    // If we moved to a new column, reset currentRow to the predictedRow for that column
-                    if (predictedCol > currentCol) {
-                        currentCol = predictedCol;
-                        break; // Move to the next column's prediction loop
-                    }
+                // Check if this predicted cell is already an input for the current number
+                const isExistingInput = data.occurrences.some(occ => occ.row === predictedRow && occ.col === predictedCol);
+                if (!isExistingInput) {
+                    data.predictions.push({ row: predictedRow, col: predictedCol, value: number });
                 }
             }
         }
@@ -330,6 +403,159 @@
                 input.dataset.isPredicted = 'false';
             });
             groupData[groupId] = {}; // Clear all stored data for the group
+            pastedNumbers[groupId] = []; // Clear pasted numbers
+            document.getElementById(`results${groupId}`).textContent = '';
+        }
+
+        function addColumn(groupId) {
+            const tableBody = document.getElementById(`group${groupId}-body`);
+            const table = tableBody.closest('table');
+            const tableHeadRow = table.querySelector('thead tr');
+            
+            // Remove the existing '+' button
+            const existingButton = tableHeadRow.querySelector('.add-column-button');
+            if (existingButton) {
+                existingButton.closest('th').remove();
+            }
+
+            const newColIndex = groupColCount[groupId];
+            const newColLabel = 24 + newColIndex;
+
+            // Add new column header
+            const newHeader = document.createElement('th');
+            newHeader.textContent = newColLabel;
+            tableHeadRow.appendChild(newHeader);
+
+            // Add new '+' button
+            const addButtonTh = document.createElement('th');
+            const addButton = document.createElement('button');
+            addButton.className = 'add-column-button';
+            addButton.textContent = '+';
+            addButton.onclick = () => addColumn(groupId);
+            addButtonTh.appendChild(addButton);
+            tableHeadRow.appendChild(addButtonTh);
+
+            // Add cells to existing rows
+            for (let i = 1; i <= NUM_ROWS; i++) {
+                const row = tableBody.rows[i - 1];
+                const cell = row.insertCell();
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.min = '0';
+                input.dataset.group = groupId;
+                input.dataset.row = i;
+                input.dataset.col = newColIndex;
+                input.addEventListener('input', handleInput);
+                cell.appendChild(input);
+            }
+
+            groupColCount[groupId]++;
+            // Re-evaluate predictions for all numbers in the group after adding a column
+            for (const num in groupData[groupId]) {
+                if (groupData[groupId].hasOwnProperty(num)) {
+                    predictPattern(groupId, parseInt(num));
+                }
+            }
+            applyPredictions(groupId);
+        }
+
+        // Handle paste event
+        document.addEventListener('paste', (event) => {
+            const activeElement = document.activeElement;
+            if (activeElement && activeElement.tagName === 'INPUT' && activeElement.type === 'number') {
+                const pasteData = event.clipboardData.getData('text');
+                const rows = pasteData.split(/\r\n|\n|\r/).map(row => row.split('\t'));
+
+                const startInput = activeElement;
+                const groupId = startInput.dataset.group;
+                let startRow = parseInt(startInput.dataset.row);
+                let startCol = parseInt(startInput.dataset.col);
+
+                event.preventDefault(); // Prevent default paste behavior
+
+                rows.forEach((colData, rIndex) => {
+                    colData.forEach((cellValue, cIndex) => {
+                        const targetRow = startRow + rIndex;
+                        const targetCol = startCol + cIndex;
+
+                        if (targetRow <= NUM_ROWS && targetCol < groupColCount[groupId]) {
+                            const targetInput = document.querySelector(
+                                `#group${groupId}-body input[data-row="${targetRow}"][data-col="${targetCol}"]`
+                            );
+                            if (targetInput) {
+                                const parsedValue = parseInt(cellValue.trim());
+                                if (!isNaN(parsedValue)) {
+                                    targetInput.value = parsedValue;
+                                    // Store 3-digit numbers for search
+                                    if (parsedValue >= 100 && parsedValue <= 999) {
+                                        if (!pastedNumbers[groupId].includes(parsedValue)) {
+                                            pastedNumbers[groupId].push(parsedValue);
+                                        }
+                                    }
+                                    // Manually trigger input event for prediction logic
+                                    const inputEvent = new Event('input', { bubbles: true });
+                                    targetInput.dispatchEvent(inputEvent);
+                                } else {
+                                    targetInput.value = '';
+                                    const inputEvent = new Event('input', { bubbles: true });
+                                    targetInput.dispatchEvent(inputEvent);
+                                }
+                            }
+                        }
+                    });
+                });
+            }
+        });
+
+        // Handle search input
+        document.getElementById('searchA').addEventListener('input', (e) => {
+            handleSearch('A', e.target.value);
+        });
+        document.getElementById('searchB').addEventListener('input', (e) => {
+            handleSearch('B', e.target.value);
+        });
+
+        function handleSearch(groupId, digit) {
+            const resultsDiv = document.getElementById(`results${groupId}`);
+            
+            if (!digit || digit < '1' || digit > '9') {
+                resultsDiv.textContent = '';
+                return;
+            }
+
+            const targetPairs = digitGroups[digit];
+            const foundPairs = new Set();
+
+            // Check all pasted 3-digit numbers
+            pastedNumbers[groupId].forEach(num => {
+                const numStr = String(num).padStart(3, '0');
+                const d0 = numStr[0];
+                const d1 = numStr[1];
+                const d2 = numStr[2];
+
+                // Check all 2-digit combinations
+                const combinations = [
+                    d0 + d1, // first two digits
+                    d1 + d2, // last two digits
+                    d0 + d2  // first and last digit
+                ];
+
+                combinations.forEach(combo => {
+                    if (targetPairs.includes(combo)) {
+                        foundPairs.add(combo);
+                        // Also add reverse
+                        const reverse = combo[1] + combo[0];
+                        foundPairs.add(reverse);
+                    }
+                });
+            });
+
+            if (foundPairs.size > 0) {
+                const sortedPairs = Array.from(foundPairs).sort();
+                resultsDiv.textContent = 'Found: ' + sortedPairs.join(', ');
+            } else {
+                resultsDiv.textContent = 'No matching pairs found.';
+            }
         }
 
         // Initialize tables on page load
