@@ -19,7 +19,7 @@
         }
         
         .container {
-            max-width: 1400px;
+            max-width: 1600px;
             margin: 0 auto;
         }
         
@@ -132,14 +132,15 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
         }
         
         th, td {
             border: 1px solid #d1d5db;
-            padding: 10px;
+            padding: 8px;
             text-align: center;
             position: relative;
+            height: 40px;
         }
         
         th {
@@ -155,22 +156,23 @@
         td:first-child {
             background-color: #fbcfe8;
             font-weight: 600;
+            width: 50px;
         }
         
         input[type="number"] {
             width: 100%;
-            padding: 6px;
-            border: 1px solid #d1d5db;
-            border-radius: 4px;
+            height: 100%;
+            padding: 0;
+            border: none;
             text-align: center;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             font-weight: 600;
+            background: transparent;
         }
         
         input[type="number"]:focus {
             outline: none;
-            border-color: #991b1b;
-            box-shadow: 0 0 0 3px rgba(153, 27, 27, 0.1);
+            background-color: rgba(153, 27, 27, 0.1);
         }
         
         .cell-predicted {
@@ -196,7 +198,7 @@
             align-items: center;
             justify-content: center;
             pointer-events: none;
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             font-weight: bold;
         }
         
@@ -252,11 +254,11 @@
             }
             
             table {
-                font-size: 0.85rem;
+                font-size: 0.75rem;
             }
             
             th, td {
-                padding: 6px;
+                padding: 4px;
             }
             
             .search-container {
@@ -314,35 +316,44 @@
                 };
             }
             
+            getPositionFromLinearIndex(linearIndex, numRows) {
+                const col = Math.floor((linearIndex - 1) / numRows);
+                const row = ((linearIndex - 1) % numRows) + 1;
+                return { col, row };
+            }
+            
+            getLinearIndex(row, col, numRows) {
+                return col * numRows + row;
+            }
+            
             predictPattern(group, number) {
                 const data = group.data[number];
                 if (!data || data.occurrences.length < 2) return [];
                 
                 const predictions = [];
                 const sortedOccurrences = [...data.occurrences].sort((a, b) => {
-                    const posA = a.col * this.NUM_ROWS + a.row;
-                    const posB = b.col * this.NUM_ROWS + b.row;
+                    const posA = this.getLinearIndex(a.row, a.col, this.NUM_ROWS);
+                    const posB = this.getLinearIndex(b.row, b.col, this.NUM_ROWS);
                     return posA - posB;
                 });
                 
                 const firstOcc = sortedOccurrences[0];
                 const secondOcc = sortedOccurrences[1];
-                const posFirst = firstOcc.col * this.NUM_ROWS + firstOcc.row;
-                const posSecond = secondOcc.col * this.NUM_ROWS + secondOcc.row;
+                const posFirst = this.getLinearIndex(firstOcc.row, firstOcc.col, this.NUM_ROWS);
+                const posSecond = this.getLinearIndex(secondOcc.row, secondOcc.col, this.NUM_ROWS);
                 const gap = posSecond - posFirst;
                 
                 if (gap <= 0) return [];
                 
                 let lastOcc = sortedOccurrences[sortedOccurrences.length - 1];
-                let currentPos = lastOcc.col * this.NUM_ROWS + lastOcc.row;
+                let currentPos = this.getLinearIndex(lastOcc.row, lastOcc.col, this.NUM_ROWS);
                 
                 const maxPos = group.columns.length * this.NUM_ROWS;
                 while (true) {
                     currentPos += gap;
                     if (currentPos > maxPos) break;
                     
-                    const predictedCol = Math.floor((currentPos - 1) / this.NUM_ROWS);
-                    const predictedRow = ((currentPos - 1) % this.NUM_ROWS) + 1;
+                    const { col: predictedCol, row: predictedRow } = this.getPositionFromLinearIndex(currentPos, this.NUM_ROWS);
                     
                     const isExistingInput = data.occurrences.some(
                         (occ) => occ.row === predictedRow && occ.col === predictedCol
@@ -363,7 +374,7 @@
                 }
                 group.rows[rowIdx][colIdx] = num;
                 
-                if (num !== null && num >= 100 && num <= 999) {
+                if (num !== null && num >= 0 && num <= 999) {
                     if (!group.pastedNumbers.includes(num)) {
                         group.pastedNumbers.push(num);
                     }
@@ -405,7 +416,6 @@
                     return;
                 }
                 
-                // Check if it's gap search (starts with =) or digit search
                 if (input.startsWith('=')) {
                     this.handleGapSearch(group, input.substring(1));
                 } else {
@@ -415,8 +425,8 @@
             
             handleGapSearch(group, gapStr) {
                 const searchGap = parseInt(gapStr, 10);
-                if (isNaN(searchGap) || searchGap < 1 || searchGap > 23) {
-                    group.searchResults = 'Please enter a number between 1 and 23 for gap search (e.g., =5).';
+                if (isNaN(searchGap) || searchGap < 1 || searchGap > 60) {
+                    group.searchResults = 'Please enter a number between 1 and 60 for gap search (e.g., =5).';
                     this.render();
                     return;
                 }
@@ -432,15 +442,15 @@
                     if (!data || data.occurrences.length < 2) continue;
                     
                     const sortedOccurrences = [...data.occurrences].sort((a, b) => {
-                        const posA = a.col * this.NUM_ROWS + a.row;
-                        const posB = b.col * this.NUM_ROWS + b.row;
+                        const posA = this.getLinearIndex(a.row, a.col, this.NUM_ROWS);
+                        const posB = this.getLinearIndex(b.row, b.col, this.NUM_ROWS);
                         return posA - posB;
                     });
                     
                     const firstOcc = sortedOccurrences[0];
                     const secondOcc = sortedOccurrences[1];
-                    const posFirst = firstOcc.col * this.NUM_ROWS + firstOcc.row;
-                    const posSecond = secondOcc.col * this.NUM_ROWS + secondOcc.row;
+                    const posFirst = this.getLinearIndex(firstOcc.row, firstOcc.col, this.NUM_ROWS);
+                    const posSecond = this.getLinearIndex(secondOcc.row, secondOcc.col, this.NUM_ROWS);
                     const gap = posSecond - posFirst;
                     
                     if (gap === searchGap) {
@@ -474,7 +484,7 @@
                     let resultsHtml = `<strong>Found ${gapMatches.length} number(s) with ${searchGap}-gap:</strong><br>`;
                     gapMatches.forEach(match => {
                         resultsHtml += `<div style="margin: 8px 0; padding: 8px; background: #f9fafb; border-radius: 4px;">
-                            <strong>${match.number}</strong> (Ones: ${match.ones}, Tens: ${match.tens}, Hundreds: ${match.hundreds})
+                            <strong>${String(match.number).padStart(3, '0')}</strong> (Ones: ${match.ones}, Tens: ${match.tens}, Hundreds: ${match.hundreds})
                         </div>`;
                     });
                     group.searchResults = resultsHtml;
@@ -543,7 +553,7 @@
             handlePaste(e, group, startRow, startCol) {
                 e.preventDefault();
                 const pasteData = e.clipboardData.getData('text');
-                const rows = pasteData.split(/\r\n|\n|\r/).map((row) => row.split(/\t|\s+/));
+                const rows = pasteData.split(/\r\n|\n|\r/).map((row) => row.split(/\t|\s+/).filter(x => x));
                 
                 rows.forEach((colData, rIndex) => {
                     colData.forEach((cellValue, cIndex) => {
@@ -568,7 +578,7 @@
                             <div class="search-container">
                                 <div class="search-field">
                                     <label>Search:</label>
-                                    <input type="text" id="search${groupId}" placeholder="Enter digit (1-9) or =gap (1-23)" maxlength="3" value="${group.searchValue}">
+                                    <input type="text" id="search${groupId}" placeholder="Enter digit (1-9) or =gap (1-60)" maxlength="3" value="${group.searchValue}">
                                     <div class="search-hint">Use "=5" for gap search, or "5" for 2-digit search</div>
                                 </div>
                                 <button class="button button-primary" onclick="app.clearGroup(app.group${groupId})">Clear All Group ${groupId}</button>
@@ -615,13 +625,13 @@
                         }
                         
                         let arrowHtml = '';
-                        if (hasGapHighlight) {
+                        if (hasGapHighlight && (value === null || value <= 10)) {
                             arrowHtml = `<div class="arrow-container arrow-${hasGapHighlight}">↓</div>`;
                         }
                         
                         html += `<td class="${cellClass}" style="position: relative;">
                             ${arrowHtml}
-                            <input type="number" value="${value || ''}" 
+                            <input type="number" value="${value || ''}" min="0" max="999"
                                 onchange="app.handleCellChange(app.group${groupId}, ${rowIdx}, ${colIdx}, this.value)"
                                 onpaste="app.handlePaste(event, app.group${groupId}, ${rowIdx}, ${colIdx})"
                                 style="position: relative; z-index: 1;">
