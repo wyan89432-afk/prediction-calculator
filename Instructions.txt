@@ -1,0 +1,18 @@
+To enable the prediction functionality in the Excel spreadsheet, please follow these steps:
+
+1.  **Open the Excel File:** Open the `Groups_Prediction.xlsx` file in Microsoft Excel.
+
+2.  **Open VBA Editor:** Press `Alt + F11` on your keyboard to open the VBA (Visual Basic for Applications) editor.
+
+3.  **Locate the Worksheet:** In the Project Explorer window (usually on the left side), navigate to `VBAProject (Groups_Prediction.xlsx)` -> `Microsoft Excel Objects` -> `Sheet1 (Prediction Sheet)`.
+
+4.  **Paste VBA Code:** Double-click on `Sheet1 (Prediction Sheet)` to open its code window. Copy the entire content from the `VBA_Code.txt` file and paste it into this code window.
+
+5.  **Save as Macro-Enabled Workbook:**
+    *   Go to `File` -> `Save As`.
+    *   In the "Save As" dialog box, change the "Save as type" to `Excel Macro-Enabled Workbook (*.xlsm)`.
+    *   Save the file with a new name (e.g., `Groups_Prediction_Macro.xlsm`) to preserve the original `.xlsx` file.
+
+6.  **Enable Macros (if prompted):** When you open the `.xlsm` file, Excel might display a security warning about macros. Click "Enable Content" or "Enable Macros" to allow the code to run.
+
+Now, when you enter a number in the data columns (B, C, D for Group A or G, H, I for Group B) and there are at least two occurrences of that number in the first column of its group (column B or G), the macro will automatically predict and fill subsequent occurrences based on the calculated gap, wrapping to the next column if necessary.

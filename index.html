@@ -319,7 +319,7 @@
                     searchResults: '',
                     searchValue: '',
                     gapHighlights: {},
-                    digitModified: {} // Track cells with modified digits
+                    digitModified: {} 
                 };
             }
             
@@ -344,6 +344,7 @@
                     return posA - posB;
                 });
                 
+                // Use the logic from VBA: find the gap between the first two occurrences
                 const firstOcc = sortedOccurrences[0];
                 const secondOcc = sortedOccurrences[1];
                 const posFirst = this.getLinearIndex(firstOcc.row, firstOcc.col, this.NUM_ROWS);
@@ -362,11 +363,12 @@
                     
                     const { col: predictedCol, row: predictedRow } = this.getPositionFromLinearIndex(currentPos, this.NUM_ROWS);
                     
-                    const isExistingInput = data.occurrences.some(
-                        (occ) => occ.row === predictedRow && occ.col === predictedCol
-                    );
+                    // VBA logic: if the predicted cell is empty, fill it. If not empty, stop.
+                    const isExistingInput = group.rows[predictedRow - 1][predictedCol] !== null;
                     if (!isExistingInput) {
                         predictions.push({ row: predictedRow, col: predictedCol, value: number });
+                    } else {
+                        break; // VBA logic: GoTo CleanExit if cell is not empty
                     }
                 }
                 
@@ -400,12 +402,13 @@
                     }
                     group.data[num].occurrences.push({ row: rowIdx + 1, col: colIdx });
                     group.data[num].occurrences.sort((a, b) => {
-                        if (a.col !== b.col) return a.col - b.col;
-                        return a.row - b.row;
+                        const posA = this.getLinearIndex(a.row, a.col, this.NUM_ROWS);
+                        const posB = this.getLinearIndex(b.row, b.col, this.NUM_ROWS);
+                        return posA - posB;
                     });
                 }
                 
-                // Recalculate predictions
+                // Recalculate predictions for all numbers
                 for (const n in group.data) {
                     group.data[n].predictions = this.predictPattern(group, parseInt(n));
                 }
@@ -455,49 +458,40 @@
                         return posA - posB;
                     });
                     
-                    const firstOcc = sortedOccurrences[0];
-                    const secondOcc = sortedOccurrences[1];
-                    const posFirst = this.getLinearIndex(firstOcc.row, firstOcc.col, this.NUM_ROWS);
-                    const posSecond = this.getLinearIndex(secondOcc.row, secondOcc.col, this.NUM_ROWS);
-                    const gap = posSecond - posFirst;
-                    
-                    if (gap === searchGap) {
-                        const numStr3 = String(num).padStart(3, '0');
-                        const ones = numStr3[2];
-                        const tens = numStr3[1];
-                        const hundreds = numStr3[0];
+                    for (let i = 0; i < sortedOccurrences.length - 1; i++) {
+                        const pos1 = this.getLinearIndex(sortedOccurrences[i].row, sortedOccurrences[i].col, this.NUM_ROWS);
+                        const pos2 = this.getLinearIndex(sortedOccurrences[i+1].row, sortedOccurrences[i+1].col, this.NUM_ROWS);
                         
-                        gapMatches.push({
-                            number: num,
-                            gap: gap,
-                            ones: ones,
-                            tens: tens,
-                            hundreds: hundreds,
-                            occurrences: data.occurrences,
-                            arrowColor: arrowColors[colorIndex % 4]
-                        });
-                        
-                        data.occurrences.forEach((occ) => {
-                            const cellKey = `${occ.row}-${occ.col}`;
-                            if (!group.gapHighlights[cellKey]) {
-                                group.gapHighlights[cellKey] = arrowColors[colorIndex % 4];
+                        if (pos2 - pos1 === searchGap) {
+                            const color = arrowColors[colorIndex % arrowColors.length];
+                            colorIndex++;
+                            
+                            gapMatches.push({
+                                number: num,
+                                from: sortedOccurrences[i],
+                                to: sortedOccurrences[i+1],
+                                color: color
+                            });
+                            
+                            // Highlight the gap path
+                            for (let p = pos1 + 1; p < pos2; p++) {
+                                const pos = this.getPositionFromLinearIndex(p, this.NUM_ROWS);
+                                group.gapHighlights[`${pos.row}-${pos.col}`] = color;
                             }
-                        });
-                        
-                        colorIndex++;
+                        }
                     }
                 }
                 
                 if (gapMatches.length > 0) {
-                    let resultsHtml = `<strong>Found ${gapMatches.length} number(s) with ${searchGap}-gap:</strong><br>`;
+                    let resultsHtml = `<strong>Found ${gapMatches.length} patterns with gap ${searchGap}:</strong><br>`;
                     gapMatches.forEach(match => {
-                        resultsHtml += `<div style="margin: 8px 0; padding: 8px; background: #f9fafb; border-radius: 4px;">
-                            <strong>${String(match.number).padStart(3, '0')}</strong> (Ones: ${match.ones}, Tens: ${match.tens}, Hundreds: ${match.hundreds})
+                        resultsHtml += `<div style="margin: 4px 0; padding: 4px; border-left: 4px solid ${match.color}; background: #f9fafb;">
+                            Number <strong>${match.number}</strong>: Pos (${match.from.row}, ${match.from.col}) to (${match.to.row}, ${match.to.col})
                         </div>`;
                     });
                     group.searchResults = resultsHtml;
                 } else {
-                    group.searchResults = `No numbers found with ${searchGap}-gap.`;
+                    group.searchResults = `No patterns found with gap ${searchGap}.`;
                 }
                 
                 this.render();
@@ -515,7 +509,6 @@
                 const matchedNumbers = [];
                 const matchDetails = [];
                 
-                // Find all numbers that contain the target pairs
                 group.pastedNumbers.forEach((num) => {
                     const numStr = String(num).padStart(3, '0');
                     const d0 = numStr[0];
@@ -547,7 +540,6 @@
                     });
                 });
                 
-                // Modify cells to show remaining digit
                 if (matchedNumbers.length > 0) {
                     matchedNumbers.forEach((num) => {
                         const numStr = String(num).padStart(3, '0');
@@ -561,7 +553,6 @@
                             { pair: d0 + d2, remaining: d1, type: 'tens' }
                         ];
                         
-                        // Find all cells with this number
                         for (let rowIdx = 0; rowIdx < group.rows.length; rowIdx++) {
                             for (let colIdx = 0; colIdx < group.rows[rowIdx].length; colIdx++) {
                                 if (group.rows[rowIdx][colIdx] === num) {
@@ -657,7 +648,7 @@
                                     <thead>
                                         <tr>
                                             <th>No</th>
-                `;
+                                `;
                 
                 group.columns.forEach((col) => {
                     html += `<th>${col}</th>`;
@@ -668,7 +659,7 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                `;
+                                `;
                 
                 group.rows.forEach((row, rowIdx) => {
                     html += `<tr>
@@ -678,18 +669,25 @@
                     row.forEach((value, colIdx) => {
                         const cellKey = `${rowIdx + 1}-${colIdx}`;
                         const modifiedDigit = group.digitModified[cellKey];
-                        const isPredicted = value !== null && group.data[value]?.predictions.some(
-                            (p) => p.row === rowIdx + 1 && p.col === colIdx
-                        );
+                        
+                        // Check if this cell is a prediction for ANY number
+                        let predictionValue = null;
+                        for (const n in group.data) {
+                            if (group.data[n].predictions.some(p => p.row === rowIdx + 1 && p.col === colIdx)) {
+                                predictionValue = n;
+                                break;
+                            }
+                        }
+                        
                         const hasGapHighlight = group.gapHighlights[cellKey];
                         
                         let cellClass = '';
-                        let displayValue = value || '';
+                        let displayValue = value === null ? (predictionValue || '') : value;
                         
                         if (modifiedDigit !== undefined) {
                             cellClass = 'cell-digit-removed';
                             displayValue = modifiedDigit;
-                        } else if (isPredicted) {
+                        } else if (value === null && predictionValue !== null) {
                             cellClass = 'cell-predicted';
                         } else if (value !== null && value > 10) {
                             cellClass = 'cell-above-10';

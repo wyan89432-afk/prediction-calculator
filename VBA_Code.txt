@@ -1,0 +1,97 @@
+
+Private Sub Worksheet_Change(ByVal Target As Range)
+    Dim ws As Worksheet
+    Set ws = Me
+
+    Dim changedValue As Variant
+    changedValue = Target.Value
+
+    Dim firstDataCol As Long
+    Dim lastDataCol As Long
+    Dim noColOffset As Long ' Offset to the 'No' column for the group
+
+    ' Check if the changed cell is within the data entry range (Group A or Group B)
+    If Not Intersect(Target, ws.Range("B2:D25,G2:I25")) Is Nothing Then
+        ' Ensure only a single cell was changed
+        If Target.Cells.Count > 1 Then Exit Sub
+
+        ' Determine which group the change belongs to
+        If Target.Column >= 2 And Target.Column <= 4 Then ' Group A (Cols B, C, D)
+            firstDataCol = 2 ' Column B
+            lastDataCol = 4  ' Column D
+            noColOffset = -1 ' Column A is 'No'
+        ElseIf Target.Column >= 7 And Target.Column <= 9 Then ' Group B (Cols G, H, I)
+            firstDataCol = 7 ' Column G
+            lastDataCol = 9  ' Column I
+            noColOffset = -1 ' Column F is 'No'
+        Else
+            Exit Sub ' Not in a monitored column
+        End If
+
+        Application.EnableEvents = False ' Prevent infinite loops
+
+        Dim occurrences As New Collection
+        Dim r As Long
+        Dim col As Long
+
+        ' Search for all occurrences of the changed value in the first data column of the group
+        For r = 2 To 25
+            If ws.Cells(r, firstDataCol).Value = changedValue Then
+                occurrences.Add r
+            End If
+        Next r
+
+        ' If less than 2 occurrences, no gap can be calculated, so exit
+        If occurrences.Count < 2 Then
+            GoTo CleanExit
+        End If
+
+        Dim gap As Long
+        gap = occurrences.Item(2) - occurrences.Item(1)
+
+        Dim lastOccurrenceRow As Long
+        lastOccurrenceRow = occurrences.Item(occurrences.Count)
+
+        Dim currentRow As Long
+        Dim currentCol As Long
+
+        currentRow = lastOccurrenceRow
+        currentCol = firstDataCol
+
+        ' Start predicting and filling cells
+        Do While True
+            Dim nextPredictedRow As Long
+            Dim nextPredictedCol As Long
+
+            nextPredictedRow = currentRow + gap
+            nextPredictedCol = currentCol
+
+            ' Handle wrapping to the next column
+            Do While nextPredictedRow > 25
+                nextPredictedRow = nextPredictedRow - 24
+                nextPredictedCol = nextPredictedCol + 1
+
+                ' If we've gone past the last column, stop
+                If nextPredictedCol > lastDataCol Then
+                    GoTo CleanExit
+                End If
+            Loop
+
+            ' If the predicted cell is empty, fill it
+            If ws.Cells(nextPredictedRow, nextPredictedCol).Value = "" Then
+                ws.Cells(nextPredictedRow, nextPredictedCol).Value = changedValue
+            Else
+                ' If the predicted cell is not empty, stop predicting for this pattern
+                ' This prevents overwriting existing user input or other predictions
+                GoTo CleanExit
+            End If
+
+            ' Update current position for the next prediction
+            currentRow = nextPredictedRow
+            currentCol = nextPredictedCol
+        Loop
+
+CleanExit:
+        Application.EnableEvents = True ' Re-enable events
+    End If
+End Sub
