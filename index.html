@@ -513,6 +513,7 @@
                 const targetPairs = this.digitGroups[digit];
                 const foundPairs = new Set();
                 const matchedNumbers = [];
+                const matchDetails = [];
                 
                 // Find all numbers that contain the target pairs
                 group.pastedNumbers.forEach((num) => {
@@ -521,17 +522,27 @@
                     const d1 = numStr[1];
                     const d2 = numStr[2];
                     
-                    const combinations = [d0 + d1, d1 + d2, d0 + d2];
+                    const combinations = [
+                        { pair: d0 + d1, remaining: d2, type: 'ones' },
+                        { pair: d1 + d2, remaining: d0, type: 'hundreds' },
+                        { pair: d0 + d2, remaining: d1, type: 'tens' }
+                    ];
                     
                     combinations.forEach((combo) => {
-                        if (targetPairs.includes(combo)) {
-                            foundPairs.add(combo);
-                            const reverse = combo[1] + combo[0];
+                        if (targetPairs.includes(combo.pair)) {
+                            foundPairs.add(combo.pair);
+                            const reverse = combo.pair[1] + combo.pair[0];
                             foundPairs.add(reverse);
                             
                             if (!matchedNumbers.includes(num)) {
                                 matchedNumbers.push(num);
                             }
+                            
+                            matchDetails.push({
+                                number: num,
+                                pair: combo.pair,
+                                remaining: combo.remaining
+                            });
                         }
                     });
                 });
@@ -544,18 +555,17 @@
                         const d1 = numStr[1];
                         const d2 = numStr[2];
                         
+                        const combinations = [
+                            { pair: d0 + d1, remaining: d2, type: 'ones' },
+                            { pair: d1 + d2, remaining: d0, type: 'hundreds' },
+                            { pair: d0 + d2, remaining: d1, type: 'tens' }
+                        ];
+                        
                         // Find all cells with this number
                         for (let rowIdx = 0; rowIdx < group.rows.length; rowIdx++) {
                             for (let colIdx = 0; colIdx < group.rows[rowIdx].length; colIdx++) {
                                 if (group.rows[rowIdx][colIdx] === num) {
                                     const cellKey = `${rowIdx + 1}-${colIdx}`;
-                                    
-                                    // Check which combination matches
-                                    const combinations = [
-                                        { pair: d0 + d1, remaining: d2, type: 'ones' },
-                                        { pair: d1 + d2, remaining: d0, type: 'hundreds' },
-                                        { pair: d0 + d2, remaining: d1, type: 'tens' }
-                                    ];
                                     
                                     for (let combo of combinations) {
                                         if (targetPairs.includes(combo.pair)) {
@@ -571,7 +581,17 @@
                 
                 if (foundPairs.size > 0) {
                     const sortedPairs = Array.from(foundPairs).sort();
-                    group.searchResults = '<strong>2-Digit Combinations with ' + digit + ':</strong><br>Found: ' + sortedPairs.join(', ');
+                    let resultsHtml = '<strong>2-Digit Combinations with ' + digit + ':</strong><br>';
+                    resultsHtml += 'Pairs: ' + sortedPairs.join(', ') + '<br><br>';
+                    resultsHtml += '<strong>Matching Numbers with Remaining Digits:</strong><br>';
+                    
+                    matchDetails.forEach(detail => {
+                        resultsHtml += `<div style="margin: 4px 0; padding: 4px; background: #f9fafb; border-radius: 4px;">
+                            <strong>${String(detail.number).padStart(3, '0')}</strong> → Pair: <strong>${detail.pair}</strong> → Remaining: <strong style="color: #dc2626; font-size: 1.1rem;">${detail.remaining}</strong>
+                        </div>`;
+                    });
+                    
+                    group.searchResults = resultsHtml;
                 } else {
                     group.searchResults = `No 2-digit combinations found with digit ${digit}.`;
                 }
