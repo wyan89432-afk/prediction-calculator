@@ -188,10 +188,10 @@
             color: white;
         }
         
-        .cell-removed {
-            background-color: #e5e7eb !important;
-            color: #9ca3af;
-            text-decoration: line-through;
+        .cell-digit-removed {
+            background-color: #dbeafe !important;
+            color: #1e40af;
+            font-weight: bold;
         }
         
         .arrow-container {
@@ -318,7 +318,7 @@
                     searchResults: '',
                     searchValue: '',
                     gapHighlights: {},
-                    removedCells: {} // Track cells removed by 2-digit search
+                    digitModified: {} // Track cells with modified digits
                 };
             }
             
@@ -415,7 +415,7 @@
             handleSearch(group, input) {
                 group.searchValue = input;
                 group.gapHighlights = {};
-                group.removedCells = {};
+                group.digitModified = {};
                 
                 if (!input) {
                     group.searchResults = '';
@@ -527,7 +527,6 @@
                             const reverse = combo[1] + combo[0];
                             foundPairs.add(reverse);
                             
-                            // Track which numbers match
                             if (!matchedNumbers.includes(num)) {
                                 matchedNumbers.push(num);
                             }
@@ -535,7 +534,7 @@
                     });
                 });
                 
-                // Auto-remove matching digit positions
+                // Modify cells to show remaining digit
                 if (matchedNumbers.length > 0) {
                     matchedNumbers.forEach((num) => {
                         const numStr = String(num).padStart(3, '0');
@@ -547,21 +546,26 @@
                         
                         combinations.forEach((combo) => {
                             if (targetPairs.includes(combo)) {
-                                // Find and mark cells with this number for removal
+                                // Find cells with this number
                                 for (let rowIdx = 0; rowIdx < group.rows.length; rowIdx++) {
                                     for (let colIdx = 0; colIdx < group.rows[rowIdx].length; colIdx++) {
                                         if (group.rows[rowIdx][colIdx] === num) {
-                                            // Determine which digit to remove
+                                            const cellKey = `${rowIdx + 1}-${colIdx}`;
+                                            
+                                            // Determine which digit to show
+                                            let remainingDigit = '';
                                             if (combo === d0 + d1) {
-                                                // Ones place matches
-                                                group.removedCells[`${rowIdx + 1}-${colIdx}`] = 'ones';
+                                                // d0 + d1 matched, show d2 (ones)
+                                                remainingDigit = d2;
                                             } else if (combo === d1 + d2) {
-                                                // Hundreds place matches
-                                                group.removedCells[`${rowIdx + 1}-${colIdx}`] = 'hundreds';
+                                                // d1 + d2 matched, show d0 (hundreds)
+                                                remainingDigit = d0;
                                             } else if (combo === d0 + d2) {
-                                                // Tens place matches
-                                                group.removedCells[`${rowIdx + 1}-${colIdx}`] = 'tens';
+                                                // d0 + d2 matched, show d1 (tens)
+                                                remainingDigit = d1;
                                             }
+                                            
+                                            group.digitModified[cellKey] = remainingDigit;
                                         }
                                     }
                                 }
@@ -595,7 +599,7 @@
                 group.searchResults = '';
                 group.searchValue = '';
                 group.gapHighlights = {};
-                group.removedCells = {};
+                group.digitModified = {};
                 this.render();
             }
             
@@ -663,14 +667,14 @@
                         
                         const cellKey = `${rowIdx + 1}-${colIdx}`;
                         const hasGapHighlight = group.gapHighlights[cellKey];
-                        const isRemoved = group.removedCells[cellKey];
+                        const modifiedDigit = group.digitModified[cellKey];
                         
                         let cellClass = '';
                         let displayValue = value || '';
                         
-                        if (isRemoved) {
-                            cellClass = 'cell-removed';
-                            displayValue = '';
+                        if (modifiedDigit !== undefined) {
+                            cellClass = 'cell-digit-removed';
+                            displayValue = modifiedDigit;
                         } else if (isPredicted) {
                             cellClass = 'cell-predicted';
                         } else if (value !== null && value > 10) {
@@ -689,7 +693,7 @@
                             <input type="number" value="${displayValue}" min="0" max="999"
                                 onchange="app.handleCellChange(app.group${groupId}, ${rowIdx}, ${colIdx}, this.value)"
                                 onpaste="app.handlePaste(event, app.group${groupId}, ${rowIdx}, ${colIdx})"
-                                style="position: relative; z-index: 1;" ${isRemoved ? 'disabled' : ''}>
+                                style="position: relative; z-index: 1;" ${modifiedDigit !== undefined ? 'disabled' : ''}>
                         </td>`;
                     });
                     
