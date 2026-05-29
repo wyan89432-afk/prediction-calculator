@@ -87,6 +87,12 @@
             font-size: 1rem;
         }
         
+        .search-hint {
+            font-size: 0.8rem;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+        
         .search-results {
             background-color: #f0f0f0;
             padding: 12px;
@@ -95,18 +101,8 @@
             font-size: 0.95rem;
             min-height: 24px;
             color: #374151;
-            max-height: 200px;
+            max-height: 250px;
             overflow-y: auto;
-        }
-        
-        .gap-info {
-            background-color: #fef3c7;
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            font-size: 0.95rem;
-            color: #92400e;
-            border-left: 4px solid #f59e0b;
         }
         
         .button {
@@ -126,15 +122,6 @@
         
         .button-primary:hover {
             background-color: #b91c1c;
-        }
-        
-        .button-secondary {
-            background-color: #e5e7eb;
-            color: #1f2937;
-        }
-        
-        .button-secondary:hover {
-            background-color: #d1d5db;
         }
         
         .table-wrapper {
@@ -259,13 +246,6 @@
             background-color: #4b5563;
         }
         
-        .position-info {
-            font-size: 0.8rem;
-            color: #666;
-            margin-top: 5px;
-            font-weight: normal;
-        }
-        
         @media (max-width: 768px) {
             h1 {
                 font-size: 1.75rem;
@@ -303,6 +283,19 @@
                 this.NUM_ROWS = 24;
                 this.INITIAL_COLUMNS = [24, 25, 26];
                 
+                // 2-digit digit groups for 1-9 search
+                this.digitGroups = {
+                    "1": ["01", "10", "12", "21", "23", "32", "34", "43", "45", "54", "56", "65", "67", "76", "78", "87", "89", "98", "90", "09"],
+                    "2": ["02", "20", "13", "31", "24", "42", "35", "53", "46", "64", "57", "75", "68", "86", "79", "97", "80", "08"],
+                    "3": ["03", "30", "14", "41", "25", "52", "36", "63", "47", "74", "58", "85", "69", "96", "70", "07"],
+                    "4": ["04", "40", "15", "51", "26", "62", "37", "73", "48", "84", "59", "95", "60", "06"],
+                    "5": ["05", "50", "16", "61", "27", "72", "38", "83", "49", "94"],
+                    "6": ["06", "60", "17", "71", "28", "82", "39", "93", "40", "04"],
+                    "7": ["07", "70", "18", "81", "29", "92", "30", "03"],
+                    "8": ["08", "80", "19", "91", "20", "02"],
+                    "9": ["09", "90"],
+                };
+                
                 this.groupA = this.initializeGroup();
                 this.groupB = this.initializeGroup();
                 
@@ -317,7 +310,7 @@
                     pastedNumbers: [],
                     searchResults: '',
                     searchValue: '',
-                    gapHighlights: {} // Store gap highlights: {cellKey: arrowColor}
+                    gapHighlights: {}
                 };
             }
             
@@ -412,14 +405,22 @@
                     return;
                 }
                 
-                const searchDigit = parseInt(input, 10);
-                if (isNaN(searchDigit) || searchDigit < 1 || searchDigit > 23) {
-                    group.searchResults = 'Please enter a number between 1 and 23 for gap search.';
+                // Check if it's gap search (starts with =) or digit search
+                if (input.startsWith('=')) {
+                    this.handleGapSearch(group, input.substring(1));
+                } else {
+                    this.handleDigitSearch(group, input);
+                }
+            }
+            
+            handleGapSearch(group, gapStr) {
+                const searchGap = parseInt(gapStr, 10);
+                if (isNaN(searchGap) || searchGap < 1 || searchGap > 23) {
+                    group.searchResults = 'Please enter a number between 1 and 23 for gap search (e.g., =5).';
                     this.render();
                     return;
                 }
                 
-                // Find all numbers with this gap
                 const gapMatches = [];
                 const arrowColors = ['yellow', 'green', 'red', 'blue'];
                 let colorIndex = 0;
@@ -430,7 +431,6 @@
                     
                     if (!data || data.occurrences.length < 2) continue;
                     
-                    // Calculate gap for this number
                     const sortedOccurrences = [...data.occurrences].sort((a, b) => {
                         const posA = a.col * this.NUM_ROWS + a.row;
                         const posB = b.col * this.NUM_ROWS + b.row;
@@ -443,8 +443,7 @@
                     const posSecond = secondOcc.col * this.NUM_ROWS + secondOcc.row;
                     const gap = posSecond - posFirst;
                     
-                    if (gap === searchDigit) {
-                        // Get position info
+                    if (gap === searchGap) {
                         const numStr3 = String(num).padStart(3, '0');
                         const ones = numStr3[2];
                         const tens = numStr3[1];
@@ -460,8 +459,7 @@
                             arrowColor: arrowColors[colorIndex % 4]
                         });
                         
-                        // Mark cells with arrows
-                        data.occurrences.forEach((occ, idx) => {
+                        data.occurrences.forEach((occ) => {
                             const cellKey = `${occ.row}-${occ.col}`;
                             if (!group.gapHighlights[cellKey]) {
                                 group.gapHighlights[cellKey] = arrowColors[colorIndex % 4];
@@ -473,16 +471,52 @@
                 }
                 
                 if (gapMatches.length > 0) {
-                    let resultsHtml = `<strong>Found ${gapMatches.length} number(s) with ${searchDigit}-gap:</strong><br>`;
+                    let resultsHtml = `<strong>Found ${gapMatches.length} number(s) with ${searchGap}-gap:</strong><br>`;
                     gapMatches.forEach(match => {
                         resultsHtml += `<div style="margin: 8px 0; padding: 8px; background: #f9fafb; border-radius: 4px;">
                             <strong>${match.number}</strong> (Ones: ${match.ones}, Tens: ${match.tens}, Hundreds: ${match.hundreds})
-                            <br><span style="font-size: 0.85rem; color: #666;">Positions: ${match.occurrences.map(o => `Row ${o.row}, Col ${o.col}`).join(' → ')}</span>
                         </div>`;
                     });
                     group.searchResults = resultsHtml;
                 } else {
-                    group.searchResults = `No numbers found with ${searchDigit}-gap.`;
+                    group.searchResults = `No numbers found with ${searchGap}-gap.`;
+                }
+                
+                this.render();
+            }
+            
+            handleDigitSearch(group, digit) {
+                if (!digit || digit < '1' || digit > '9') {
+                    group.searchResults = 'Please enter a digit 1-9 for search.';
+                    this.render();
+                    return;
+                }
+                
+                const targetPairs = this.digitGroups[digit];
+                const foundPairs = new Set();
+                
+                group.pastedNumbers.forEach((num) => {
+                    const numStr = String(num).padStart(3, '0');
+                    const d0 = numStr[0];
+                    const d1 = numStr[1];
+                    const d2 = numStr[2];
+                    
+                    const combinations = [d0 + d1, d1 + d2, d0 + d2];
+                    
+                    combinations.forEach((combo) => {
+                        if (targetPairs.includes(combo)) {
+                            foundPairs.add(combo);
+                            const reverse = combo[1] + combo[0];
+                            foundPairs.add(reverse);
+                        }
+                    });
+                });
+                
+                if (foundPairs.size > 0) {
+                    const sortedPairs = Array.from(foundPairs).sort();
+                    group.searchResults = '<strong>2-Digit Combinations with ' + digit + ':</strong><br>Found: ' + sortedPairs.join(', ');
+                } else {
+                    group.searchResults = `No 2-digit combinations found with digit ${digit}.`;
                 }
                 
                 this.render();
@@ -533,8 +567,9 @@
                         <div class="group-content">
                             <div class="search-container">
                                 <div class="search-field">
-                                    <label>Search Gap (1-23):</label>
-                                    <input type="text" id="search${groupId}" placeholder="Enter gap number" maxlength="2" value="${group.searchValue}">
+                                    <label>Search:</label>
+                                    <input type="text" id="search${groupId}" placeholder="Enter digit (1-9) or =gap (1-23)" maxlength="3" value="${group.searchValue}">
+                                    <div class="search-hint">Use "=5" for gap search, or "5" for 2-digit search</div>
                                 </div>
                                 <button class="button button-primary" onclick="app.clearGroup(app.group${groupId})">Clear All Group ${groupId}</button>
                             </div>
@@ -581,13 +616,7 @@
                         
                         let arrowHtml = '';
                         if (hasGapHighlight) {
-                            const arrowMap = {
-                                'yellow': '↓',
-                                'green': '↓',
-                                'red': '↓',
-                                'blue': '↓'
-                            };
-                            arrowHtml = `<div class="arrow-container arrow-${hasGapHighlight}">${arrowMap[hasGapHighlight]}</div>`;
+                            arrowHtml = `<div class="arrow-container arrow-${hasGapHighlight}">↓</div>`;
                         }
                         
                         html += `<td class="${cellClass}" style="position: relative;">
@@ -625,7 +654,6 @@
                 
                 appDiv.innerHTML = html;
                 
-                // Attach search listeners
                 document.getElementById('searchA').addEventListener('input', (e) => {
                     this.handleSearch(this.groupA, e.target.value);
                 });
