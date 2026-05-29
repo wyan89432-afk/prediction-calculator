@@ -312,14 +312,15 @@
             
             initializeGroup() {
                 return {
-                    columns: this.INITIAL_COLUMNS,
+                    columns: [...this.INITIAL_COLUMNS],
                     rows: Array(this.NUM_ROWS).fill(null).map(() => Array(3).fill(null)),
                     data: {},
                     pastedNumbers: [],
                     searchResults: '',
                     searchValue: '',
                     gapHighlights: {},
-                    digitModified: {} 
+                    digitModified: {},
+                    autoFilled: new Set()
                 };
             }
             
@@ -333,86 +334,84 @@
                 return col * numRows + row;
             }
             
-            predictPattern(group, number) {
-                const data = group.data[number];
-                if (!data || data.occurrences.length < 2) return [];
+            updateGroupData(group) {
+                group.data = {};
+                group.pastedNumbers = [];
                 
-                const predictions = [];
-                const sortedOccurrences = [...data.occurrences].sort((a, b) => {
-                    const posA = this.getLinearIndex(a.row, a.col, this.NUM_ROWS);
-                    const posB = this.getLinearIndex(b.row, b.col, this.NUM_ROWS);
-                    return posA - posB;
-                });
-                
-                // Use the logic from VBA: find the gap between the first two occurrences
-                const firstOcc = sortedOccurrences[0];
-                const secondOcc = sortedOccurrences[1];
-                const posFirst = this.getLinearIndex(firstOcc.row, firstOcc.col, this.NUM_ROWS);
-                const posSecond = this.getLinearIndex(secondOcc.row, secondOcc.col, this.NUM_ROWS);
-                const gap = posSecond - posFirst;
-                
-                if (gap <= 0) return [];
-                
-                let lastOcc = sortedOccurrences[sortedOccurrences.length - 1];
-                let currentPos = this.getLinearIndex(lastOcc.row, lastOcc.col, this.NUM_ROWS);
-                
-                const maxPos = group.columns.length * this.NUM_ROWS;
-                while (true) {
-                    currentPos += gap;
-                    if (currentPos > maxPos) break;
-                    
-                    const { col: predictedCol, row: predictedRow } = this.getPositionFromLinearIndex(currentPos, this.NUM_ROWS);
-                    
-                    // VBA logic: if the predicted cell is empty, fill it. If not empty, stop.
-                    const isExistingInput = group.rows[predictedRow - 1][predictedCol] !== null;
-                    if (!isExistingInput) {
-                        predictions.push({ row: predictedRow, col: predictedCol, value: number });
-                    } else {
-                        break; // VBA logic: GoTo CleanExit if cell is not empty
+                for (let r = 0; r < this.NUM_ROWS; r++) {
+                    for (let c = 0; c < group.columns.length; c++) {
+                        const val = group.rows[r][c];
+                        if (val !== null) {
+                            if (!group.data[val]) {
+                                group.data[val] = { occurrences: [] };
+                            }
+                            group.data[val].occurrences.push({ row: r + 1, col: c });
+                            
+                            if (!group.pastedNumbers.includes(val)) {
+                                group.pastedNumbers.push(val);
+                            }
+                        }
                     }
                 }
                 
-                return predictions;
+                // Sort occurrences by linear index
+                for (const val in group.data) {
+                    group.data[val].occurrences.sort((a, b) => 
+                        this.getLinearIndex(a.row, a.col, this.NUM_ROWS) - 
+                        this.getLinearIndex(b.row, b.col, this.NUM_ROWS)
+                    );
+                }
             }
             
             handleCellChange(group, rowIdx, colIdx, value) {
                 const num = value === '' ? null : parseInt(value, 10);
                 
-                if (!group.rows[rowIdx]) {
-                    group.rows[rowIdx] = Array(group.columns.length).fill(null);
-                }
+                // 1. Update the cell the user changed
                 group.rows[rowIdx][colIdx] = num;
                 
-                if (num !== null && num >= 0 && num <= 999) {
-                    if (!group.pastedNumbers.includes(num)) {
-                        group.pastedNumbers.push(num);
-                    }
-                }
-                
-                // Update data tracking
-                for (const n in group.data) {
-                    group.data[n].occurrences = group.data[n].occurrences.filter(
-                        (occ) => !(occ.row === rowIdx + 1 && occ.col === colIdx)
-                    );
-                }
-                
+                // If user manually changed an auto-filled cell, it's no longer auto-filled
+                group.autoFilled.delete(`${rowIdx + 1}-${colIdx}`);
+
                 if (num !== null) {
-                    if (!group.data[num]) {
-                        group.data[num] = { occurrences: [], predictions: [] };
+                    // 2. Update data to find patterns
+                    this.updateGroupData(group);
+
+                    // 3. Calculate and APPLY auto-fill based on the changed number
+                    const data = group.data[num];
+                    if (data && data.occurrences.length >= 2) {
+                        // Use the first two occurrences to define the gap (as per VBA logic)
+                        const pos1 = this.getLinearIndex(data.occurrences[0].row, data.occurrences[0].col, this.NUM_ROWS);
+                        const pos2 = this.getLinearIndex(data.occurrences[1].row, data.occurrences[1].col, this.NUM_ROWS);
+                        const gap = pos2 - pos1;
+                        
+                        if (gap > 0) {
+                            // Start predicting from the last known occurrence
+                            let lastOcc = data.occurrences[data.occurrences.length - 1];
+                            let currentPos = this.getLinearIndex(lastOcc.row, lastOcc.col, this.NUM_ROWS);
+                            const maxPos = group.columns.length * this.NUM_ROWS;
+                            
+                            while (true) {
+                                currentPos += gap;
+                                if (currentPos > maxPos) break;
+                                
+                                const { col, row } = this.getPositionFromLinearIndex(currentPos, this.NUM_ROWS);
+                                
+                                // Only fill if the cell is empty
+                                if (group.rows[row - 1][col] === null) {
+                                    group.rows[row - 1][col] = num;
+                                    group.autoFilled.add(`${row}-${col}`);
+                                } else if (group.rows[row - 1][col] !== num) {
+                                    // If we hit a different number, stop predicting for this pattern
+                                    break;
+                                }
+                                // If it's already the same number, just continue
+                            }
+                        }
                     }
-                    group.data[num].occurrences.push({ row: rowIdx + 1, col: colIdx });
-                    group.data[num].occurrences.sort((a, b) => {
-                        const posA = this.getLinearIndex(a.row, a.col, this.NUM_ROWS);
-                        const posB = this.getLinearIndex(b.row, b.col, this.NUM_ROWS);
-                        return posA - posB;
-                    });
                 }
                 
-                // Recalculate predictions for all numbers
-                for (const n in group.data) {
-                    group.data[n].predictions = this.predictPattern(group, parseInt(n));
-                }
-                
+                // 4. Final data update and render
+                this.updateGroupData(group);
                 this.render();
             }
             
@@ -449,18 +448,11 @@
                 for (const numStr in group.data) {
                     const num = parseInt(numStr);
                     const data = group.data[num];
-                    
                     if (!data || data.occurrences.length < 2) continue;
                     
-                    const sortedOccurrences = [...data.occurrences].sort((a, b) => {
-                        const posA = this.getLinearIndex(a.row, a.col, this.NUM_ROWS);
-                        const posB = this.getLinearIndex(b.row, b.col, this.NUM_ROWS);
-                        return posA - posB;
-                    });
-                    
-                    for (let i = 0; i < sortedOccurrences.length - 1; i++) {
-                        const pos1 = this.getLinearIndex(sortedOccurrences[i].row, sortedOccurrences[i].col, this.NUM_ROWS);
-                        const pos2 = this.getLinearIndex(sortedOccurrences[i+1].row, sortedOccurrences[i+1].col, this.NUM_ROWS);
+                    for (let i = 0; i < data.occurrences.length - 1; i++) {
+                        const pos1 = this.getLinearIndex(data.occurrences[i].row, data.occurrences[i].col, this.NUM_ROWS);
+                        const pos2 = this.getLinearIndex(data.occurrences[i+1].row, data.occurrences[i+1].col, this.NUM_ROWS);
                         
                         if (pos2 - pos1 === searchGap) {
                             const color = arrowColors[colorIndex % arrowColors.length];
@@ -468,12 +460,11 @@
                             
                             gapMatches.push({
                                 number: num,
-                                from: sortedOccurrences[i],
-                                to: sortedOccurrences[i+1],
+                                from: data.occurrences[i],
+                                to: data.occurrences[i+1],
                                 color: color
                             });
                             
-                            // Highlight the gap path
                             for (let p = pos1 + 1; p < pos2; p++) {
                                 const pos = this.getPositionFromLinearIndex(p, this.NUM_ROWS);
                                 group.gapHighlights[`${pos.row}-${pos.col}`] = color;
@@ -486,7 +477,7 @@
                     let resultsHtml = `<strong>Found ${gapMatches.length} patterns with gap ${searchGap}:</strong><br>`;
                     gapMatches.forEach(match => {
                         resultsHtml += `<div style="margin: 4px 0; padding: 4px; border-left: 4px solid ${match.color}; background: #f9fafb;">
-                            Number <strong>${match.number}</strong>: Pos (${match.from.row}, ${match.from.col}) to (${match.to.row}, ${match.to.col})
+                            Number <strong>${match.number}</strong>: Pos (${match.from.row}, ${group.columns[match.from.col]}) to (${match.to.row}, ${group.columns[match.to.col]})
                         </div>`;
                     });
                     group.searchResults = resultsHtml;
@@ -516,9 +507,9 @@
                     const d2 = numStr[2];
                     
                     const combinations = [
-                        { pair: d0 + d1, remaining: d2, type: 'ones' },
-                        { pair: d1 + d2, remaining: d0, type: 'hundreds' },
-                        { pair: d0 + d2, remaining: d1, type: 'tens' }
+                        { pair: d0 + d1, remaining: d2 },
+                        { pair: d1 + d2, remaining: d0 },
+                        { pair: d0 + d2, remaining: d1 }
                     ];
                     
                     combinations.forEach((combo) => {
@@ -546,21 +537,18 @@
                         const d0 = numStr[0];
                         const d1 = numStr[1];
                         const d2 = numStr[2];
-                        
                         const combinations = [
-                            { pair: d0 + d1, remaining: d2, type: 'ones' },
-                            { pair: d1 + d2, remaining: d0, type: 'hundreds' },
-                            { pair: d0 + d2, remaining: d1, type: 'tens' }
+                            { pair: d0 + d1, remaining: d2 },
+                            { pair: d1 + d2, remaining: d0 },
+                            { pair: d0 + d2, remaining: d1 }
                         ];
                         
-                        for (let rowIdx = 0; rowIdx < group.rows.length; rowIdx++) {
-                            for (let colIdx = 0; colIdx < group.rows[rowIdx].length; colIdx++) {
-                                if (group.rows[rowIdx][colIdx] === num) {
-                                    const cellKey = `${rowIdx + 1}-${colIdx}`;
-                                    
+                        for (let r = 0; r < this.NUM_ROWS; r++) {
+                            for (let c = 0; c < group.columns.length; c++) {
+                                if (group.rows[r][c] === num) {
                                     for (let combo of combinations) {
                                         if (targetPairs.includes(combo.pair)) {
-                                            group.digitModified[cellKey] = combo.remaining;
+                                            group.digitModified[`${r + 1}-${c}`] = combo.remaining;
                                             break;
                                         }
                                     }
@@ -572,16 +560,15 @@
                 
                 if (foundPairs.size > 0) {
                     const sortedPairs = Array.from(foundPairs).sort();
-                    let resultsHtml = '<strong>2-Digit Combinations with ' + digit + ':</strong><br>';
-                    resultsHtml += 'Pairs: ' + sortedPairs.join(', ') + '<br><br>';
-                    resultsHtml += '<strong>Matching Numbers with Remaining Digits:</strong><br>';
+                    let resultsHtml = `<strong>2-Digit Combinations with ${digit}:</strong><br>`;
+                    resultsHtml += `Pairs: ${sortedPairs.join(', ')}<br><br>`;
+                    resultsHtml += `<strong>Matching Numbers with Remaining Digits:</strong><br>`;
                     
                     matchDetails.forEach(detail => {
                         resultsHtml += `<div style="margin: 4px 0; padding: 4px; background: #f9fafb; border-radius: 4px;">
                             <strong>${String(detail.number).padStart(3, '0')}</strong> → Pair: <strong>${detail.pair}</strong> → Remaining: <strong style="color: #dc2626; font-size: 1.1rem;">${detail.remaining}</strong>
                         </div>`;
                     });
-                    
                     group.searchResults = resultsHtml;
                 } else {
                     group.searchResults = `No 2-digit combinations found with digit ${digit}.`;
@@ -598,7 +585,7 @@
             }
             
             clearGroup(group) {
-                group.columns = this.INITIAL_COLUMNS;
+                group.columns = [...this.INITIAL_COLUMNS];
                 group.rows = Array(this.NUM_ROWS).fill(null).map(() => Array(3).fill(null));
                 group.data = {};
                 group.pastedNumbers = [];
@@ -606,6 +593,7 @@
                 group.searchValue = '';
                 group.gapHighlights = {};
                 group.digitModified = {};
+                group.autoFilled = new Set();
                 this.render();
             }
             
@@ -618,7 +606,6 @@
                     colData.forEach((cellValue, cIndex) => {
                         const targetRow = startRow + rIndex;
                         const targetCol = startCol + cIndex;
-                        
                         if (targetRow < this.NUM_ROWS && targetCol < group.columns.length) {
                             const parsedValue = parseInt(cellValue.trim(), 10);
                             if (!isNaN(parsedValue)) {
@@ -648,7 +635,7 @@
                                     <thead>
                                         <tr>
                                             <th>No</th>
-                                `;
+                `;
                 
                 group.columns.forEach((col) => {
                     html += `<th>${col}</th>`;
@@ -659,35 +646,23 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                `;
+                `;
                 
                 group.rows.forEach((row, rowIdx) => {
-                    html += `<tr>
-                        <td>${rowIdx + 1}</td>
-                    `;
-                    
+                    html += `<tr><td>${rowIdx + 1}</td>`;
                     row.forEach((value, colIdx) => {
                         const cellKey = `${rowIdx + 1}-${colIdx}`;
                         const modifiedDigit = group.digitModified[cellKey];
-                        
-                        // Check if this cell is a prediction for ANY number
-                        let predictionValue = null;
-                        for (const n in group.data) {
-                            if (group.data[n].predictions.some(p => p.row === rowIdx + 1 && p.col === colIdx)) {
-                                predictionValue = n;
-                                break;
-                            }
-                        }
-                        
+                        const isAutoFilled = group.autoFilled.has(cellKey);
                         const hasGapHighlight = group.gapHighlights[cellKey];
                         
                         let cellClass = '';
-                        let displayValue = value === null ? (predictionValue || '') : value;
+                        let displayValue = value === null ? '' : value;
                         
                         if (modifiedDigit !== undefined) {
                             cellClass = 'cell-digit-removed';
                             displayValue = modifiedDigit;
-                        } else if (value === null && predictionValue !== null) {
+                        } else if (isAutoFilled) {
                             cellClass = 'cell-predicted';
                         } else if (value !== null && value > 10) {
                             cellClass = 'cell-above-10';
@@ -710,40 +685,23 @@
                             </div>
                         </td>`;
                     });
-                    
                     html += `<td></td></tr>`;
                 });
                 
-                html += `
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                
+                html += `</tbody></table></div></div></div>`;
                 return html;
             }
             
             render() {
                 const appDiv = document.getElementById('app');
-                let html = this.renderGroupTable(this.groupA, 'A') + this.renderGroupTable(this.groupB, 'B');
-                
-                html += `
+                appDiv.innerHTML = this.renderGroupTable(this.groupA, 'A') + this.renderGroupTable(this.groupB, 'B') + `
                     <div class="button-group">
                         <button class="back-button" onclick="app.reset()">← Back / Reset All</button>
                     </div>
                 `;
                 
-                appDiv.innerHTML = html;
-                
-                document.getElementById('searchA').addEventListener('input', (e) => {
-                    this.handleSearch(this.groupA, e.target.value);
-                });
-                
-                document.getElementById('searchB').addEventListener('input', (e) => {
-                    this.handleSearch(this.groupB, e.target.value);
-                });
+                document.getElementById('searchA').addEventListener('input', (e) => this.handleSearch(this.groupA, e.target.value));
+                document.getElementById('searchB').addEventListener('input', (e) => this.handleSearch(this.groupB, e.target.value));
             }
             
             reset() {
