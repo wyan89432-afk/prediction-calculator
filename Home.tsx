@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Plus, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 interface PredictionData {
@@ -33,6 +33,13 @@ const digitGroups: Record<string, string[]> = {
   "9": ["09", "90"],
 };
 
+// Dynamically load Tesseract.js
+declare global {
+  interface Window {
+    Tesseract: any;
+  }
+}
+
 export default function Home() {
   const [groupA, setGroupA] = useState<GroupState>({
     columns: INITIAL_COLUMNS,
@@ -52,6 +59,16 @@ export default function Home() {
   const [searchB, setSearchB] = useState("");
   const [searchResultsA, setSearchResultsA] = useState("");
   const [searchResultsB, setSearchResultsB] = useState("");
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Load Tesseract.js
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js";
+    script.async = true;
+    document.head.appendChild(script);
+  }, []);
 
   // Predict pattern based on gap
   const predictPattern = useCallback(
@@ -256,6 +273,80 @@ export default function Home() {
     toast.success(`Group ${groupId} cleared`);
   };
 
+  // Handle image upload and OCR
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Display image
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setUploadedImage(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Process with OCR
+    setIsProcessing(true);
+    try {
+      if (!window.Tesseract) {
+        toast.error("Tesseract.js is loading. Please try again in a moment.");
+        setIsProcessing(false);
+        return;
+      }
+
+      const { data: { text } } = await window.Tesseract.recognize(file, "eng");
+      
+      // Parse the extracted text to find numbers
+      const numbers = text.match(/\d+/g)?.map(Number) || [];
+      
+      if (numbers.length === 0) {
+        toast.error("No numbers found in the image");
+        setIsProcessing(false);
+        return;
+      }
+
+      // Filter 3-digit numbers (lottery numbers)
+      const lotteryNumbers = numbers.filter(n => n >= 100 && n <= 999);
+      
+      if (lotteryNumbers.length === 0) {
+        toast.error("No valid lottery numbers (100-999) found in the image");
+        setIsProcessing(false);
+        return;
+      }
+
+      // Split numbers into Group A and Group B
+      // Using simple logic: first half to A, second half to B
+      const midpoint = Math.ceil(lotteryNumbers.length / 2);
+      const groupANumbers = lotteryNumbers.slice(0, midpoint);
+      const groupBNumbers = lotteryNumbers.slice(midpoint);
+
+      // Auto-fill Group A
+      groupANumbers.forEach((num, index) => {
+        const rowIdx = index;
+        const colIdx = 0; // Start from first column
+        if (rowIdx < NUM_ROWS) {
+          handleCellChange("A", rowIdx, colIdx, String(num));
+        }
+      });
+
+      // Auto-fill Group B
+      groupBNumbers.forEach((num, index) => {
+        const rowIdx = index;
+        const colIdx = 0; // Start from first column
+        if (rowIdx < NUM_ROWS) {
+          handleCellChange("B", rowIdx, colIdx, String(num));
+        }
+      });
+
+      toast.success(`Extracted ${lotteryNumbers.length} numbers from the image!`);
+    } catch (error) {
+      console.error("OCR Error:", error);
+      toast.error("Error processing image. Please try again.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // Render group table
   const renderGroupTable = (
     group: GroupState,
@@ -352,7 +443,7 @@ export default function Home() {
                             handleCellChange(groupId, rowIdx, colIdx, e.target.value)
                           }
                           onPaste={(e) => handlePaste(e, groupId, rowIdx, colIdx)}
-                            className={`w-full h-8 text-center text-sm font-semibold rounded ${
+                          className={`w-full h-8 text-center text-sm font-semibold rounded ${
                             isPredicted
                               ? "bg-cyan-200 text-slate-900"
                               : value !== null && value > 10
@@ -386,6 +477,45 @@ export default function Home() {
           Analyze number patterns with dynamic columns and gap visualization
         </p>
 
+        {/* Image Upload Section */}
+        <Card className="p-6 bg-white mb-8">
+          <div className="flex gap-4 items-end">
+            <div className="flex-1">
+              <label className="text-sm font-medium text-slate-700 block mb-2">
+                Upload Lottery Table Image:
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                disabled={isProcessing}
+                className="block w-full text-sm text-slate-500
+                  file:mr-4 file:py-2 file:px-4
+                  file:rounded-md file:border-0
+                  file:text-sm file:font-semibold
+                  file:bg-blue-50 file:text-blue-700
+                  hover:file:bg-blue-100"
+              />
+            </div>
+            {isProcessing && (
+              <div className="text-sm text-slate-600">
+                Processing image...
+              </div>
+            )}
+          </div>
+
+          {uploadedImage && (
+            <div className="mt-4">
+              <p className="text-sm font-medium text-slate-700 mb-2">Uploaded Image:</p>
+              <img
+                src={uploadedImage}
+                alt="Uploaded lottery table"
+                className="max-w-md max-h-96 border border-gray-300 rounded"
+              />
+            </div>
+          )}
+        </Card>
+
         {renderGroupTable(groupA, "A", searchA, searchResultsA)}
         {renderGroupTable(groupB, "B", searchB, searchResultsB)}
 
@@ -409,6 +539,7 @@ export default function Home() {
               setSearchB("");
               setSearchResultsA("");
               setSearchResultsB("");
+              setUploadedImage(null);
               toast.success("Reset complete");
             }}
             variant="outline"
