@@ -3,25 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>24 Row Auto Fill Table</title>
+  <title>24 Row OCR Auto Fill Table</title>
   <link rel="stylesheet" href="style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
 </head>
 <body>
   <div class="app">
     <header class="topbar">
-      <div>
-        <h1>24 Row Auto Fill Table</h1>
-        <p>Upload Excel, edit cells, and the table will auto-fill repeated patterns.</p>
+      <div class="title-block">
+        <h1>24 Row OCR Auto Fill Table</h1>
+        <p>Upload a picture, OCR will read numbers, and the table will auto-fill by gap pattern.</p>
       </div>
 
       <div class="controls">
         <label class="file-btn">
-          Upload Excel
-          <input id="fileInput" type="file" accept=".xlsx,.xls" hidden />
+          Upload Image
+          <input id="fileInput" type="file" accept="image/*" hidden />
         </label>
         <button id="addColumnBtn" class="btn btn-green">+ Column</button>
-        <button id="exportBtn" class="btn btn-blue">Export Excel</button>
         <button id="clearBtn" class="btn btn-dark">Clear</button>
       </div>
     </header>
@@ -30,6 +29,11 @@
       <div class="pill" id="statusText">Ready</div>
       <div class="pill" id="fileText">File: -</div>
       <div class="pill" id="colText">Columns: 3</div>
+      <div class="pill" id="ocrText">OCR: -</div>
+    </section>
+
+    <section class="preview-wrap">
+      <img id="previewImage" class="preview-image hidden" alt="Uploaded preview" />
     </section>
 
     <main class="table-wrap">
@@ -37,7 +41,7 @@
     </main>
 
     <footer class="note">
-      24 rows fixed. Columns can grow unlimited. Auto-fill uses repeated-value gap pattern.
+      24 rows fixed. Columns grow as needed. Edit cells manually anytime.
     </footer>
   </div>
 
