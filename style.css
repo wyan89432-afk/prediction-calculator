@@ -23,13 +23,13 @@ body {
   margin-bottom: 14px;
 }
 
-h1 {
+.title-block h1 {
   margin: 0;
   font-size: 28px;
   font-weight: 800;
 }
 
-p {
+.title-block p {
   margin: 6px 0 0;
   color: #4b5563;
 }
@@ -59,11 +59,6 @@ p {
   color: #fff;
 }
 
-.btn-blue {
-  background: #2563eb;
-  color: #fff;
-}
-
 .btn-dark {
   background: #374151;
   color: #fff;
@@ -88,6 +83,23 @@ p {
   border-radius: 999px;
   font-size: 13px;
   color: #374151;
+}
+
+.preview-wrap {
+  margin-bottom: 14px;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 320px;
+  border: 1px solid #d1d5db;
+  border-radius: 14px;
+  background: #fff;
+  display: block;
+}
+
+.hidden {
+  display: none;
 }
 
 .table-wrap {
@@ -170,7 +182,7 @@ th {
 }
 
 @media (max-width: 768px) {
-  h1 {
+  .title-block h1 {
     font-size: 22px;
   }
 
